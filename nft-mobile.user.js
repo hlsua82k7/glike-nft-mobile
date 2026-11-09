@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.1.5
+// @version      1.1.6
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -173,6 +173,7 @@
   // ── 主要初始化 ─────────────────────────────────────────
   function init() {
     buildPanel();
+    if (IS_HOME) installApiInterceptor();
     if (IS_LOGIN)                              initLogin();
     if (feat('mobile_deposit'))                initDeposit();
     if (IS_PURCHASE && feat('mobile_snipe'))   initPurchase();
@@ -499,6 +500,39 @@
 
   function initPurchase() {
     renderSnipeAccSel();
+  }
+
+  // ── API 攔截器 ────────────────────────────────────────
+  function installApiInterceptor() {
+    const origFetch = window.fetch;
+    window.fetch = async function(...args) {
+      const res = await origFetch.apply(this, args);
+      try {
+        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+        if (!url.includes('nft-license-worker')) {
+          const clone = res.clone();
+          const ct = clone.headers.get('content-type') || '';
+          if (ct.includes('json')) {
+            clone.json().then(data => {
+              showToast(`[fetch] ${url.split('/').slice(-2).join('/')}\n${JSON.stringify(data).slice(0, 200)}`);
+            }).catch(() => {});
+          }
+        }
+      } catch {}
+      return res;
+    };
+    const origOpen = XMLHttpRequest.prototype.open;
+    const origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) { this._url = url; return origOpen.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function() {
+      this.addEventListener('load', function() {
+        try {
+          const data = JSON.parse(this.responseText);
+          showToast(`[xhr] ${(this._url||'').split('/').slice(-2).join('/')}\n${JSON.stringify(data).slice(0, 200)}`);
+        } catch {}
+      });
+      return origSend.apply(this, arguments);
+    };
   }
 
 // ── 登入頁 ────────────────────────────────────────────
