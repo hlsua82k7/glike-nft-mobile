@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.2
+// @version      1.2.3
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -558,8 +558,11 @@
       const prev = localStorage.getItem('uni_site_account');
       localStorage.setItem('uni_site_account', found);
       setAccountDisplay(found);
-      // 第一次抓到帳號：重新跑完整 boot（確保用真實帳號綁定）
-      if (!prev) boot();
+      // 帳號不同（換人登入）或第一次：清 cache 重新驗證
+      if (prev !== found) {
+        localStorage.removeItem(CACHE_KEY);
+        boot();
+      }
     } else if (stored) {
       setAccountDisplay(stored);
     }
