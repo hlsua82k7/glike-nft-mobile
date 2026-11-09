@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.3
+// @version      1.2.4
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -60,7 +60,11 @@
       return;
     }
 
-    if (cacheValid) { init(); refreshLicense(); return; }
+    // 每次重新讀 cache（不用常數，避免帳號切換後 cache 被清卻仍判為有效）
+    const nowCache = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); } catch { return null; } })();
+    const nowCacheValid = nowCache && nowCache.ok && (Date.now() - nowCache.ts < CACHE_MAX_AGE);
+
+    if (nowCacheValid) { init(); refreshLicense(); return; }
     try {
       const res = await verifyLicense(LICENSE_KEY);
       if (res.ok) {
@@ -71,7 +75,7 @@
         showLicensePrompt(res.reason || '授權無效');
       }
     } catch {
-      if (LICENSE_KEY && cacheValid) init();
+      if (LICENSE_KEY && nowCacheValid) init();
       else if (!LICENSE_KEY) showLicensePrompt();
       else showLicensePrompt('驗證失敗，請檢查網路');
     }
