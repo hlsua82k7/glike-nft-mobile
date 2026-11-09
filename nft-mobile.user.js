@@ -18,27 +18,20 @@
   const CACHE_KEY    = 'uni_license_cache';
   const CACHE_MAX_AGE= 99 * 24 * 60 * 60 * 1000;
 
-  // 裝置名稱：讓使用者自行輸入，存在 localStorage
+  // 裝置 ID：第一次產生後永久存在 localStorage
   function getDeviceId() {
     let id = localStorage.getItem('uni_device_id');
     if (!id) {
-      const name = prompt('請輸入此裝置的名稱（例如：我的iPhone）\n之後每次都會用這個名稱識別裝置，請記住它。');
-      if (!name || !name.trim()) {
-        alert('必須輸入裝置名稱才能使用');
-        return null;
-      }
-      id = name.trim();
+      id = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
       localStorage.setItem('uni_device_id', id);
     }
     return id;
   }
 
   async function verifyLicense(key) {
-    const deviceId = getDeviceId();
-    if (!deviceId) return { ok: false, valid: false, reason: '未設定裝置名稱' };
     const r = await fetch(`${LICENSE_URL}/verify`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ key, device_id: deviceId, domain: location.hostname })
+      body: JSON.stringify({ key, device_id: getDeviceId(), domain: location.hostname })
     });
     return await r.json();
   }
