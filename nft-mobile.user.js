@@ -171,7 +171,12 @@
     if (IS_LOGIN)                              initLogin();
     if (feat('mobile_deposit'))                initDeposit();
     if (IS_PURCHASE && feat('mobile_snipe'))   initPurchase();
-    if (IS_HOME)                         initHome();
+    if (IS_HOME)                               initHome();
+    else {
+      // 非首頁也嘗試顯示已存的帳號
+      const stored = localStorage.getItem('uni_account');
+      if (stored) setAccountDisplay(stored);
+    }
     requestNotifPerm();
   }
 
@@ -545,19 +550,27 @@
     if (acc) {
       if (found) localStorage.setItem('uni_account', found);
       showToast(`登入帳號：${acc}`);
-      // 顯示在面板
+      setAccountDisplay(acc);
+    } else if (stored) {
+      setAccountDisplay(stored);
+    }
+  }
+
+  function setAccountDisplay(acc) {
+    let accEl = document.getElementById('m-account-info');
+    if (!accEl) {
+      accEl = document.createElement('div');
+      accEl.id = 'm-account-info';
+      accEl.style.cssText = 'font-size:11px;color:#aaa;padding:2px 0 6px;border-bottom:1px solid #333;margin-bottom:8px;';
+      // 插到面板第一個子元素後面（標題列之後）
       const panel = document.getElementById('m-panel');
       if (panel) {
-        let accEl = document.getElementById('m-account-info');
-        if (!accEl) {
-          accEl = document.createElement('div');
-          accEl.id = 'm-account-info';
-          accEl.style.cssText = 'font-size:11px;color:#aaa;padding:2px 0;border-bottom:1px solid #333;margin-bottom:4px;';
-          panel.querySelector('.m-content')?.prepend(accEl);
-        }
-        accEl.textContent = '帳號：' + acc;
+        const firstChild = panel.firstElementChild;
+        if (firstChild) firstChild.after(accEl);
+        else panel.prepend(accEl);
       }
     }
+    accEl.textContent = '帳號：' + acc;
   }
 
   async function fetchAccountFromApi() {
