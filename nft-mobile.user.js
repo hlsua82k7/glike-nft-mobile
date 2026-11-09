@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.1.3
+// @version      1.1.4
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -168,6 +168,7 @@
   // ── 主要初始化 ─────────────────────────────────────────
   function init() {
     buildPanel();
+    installApiInterceptor();
     if (IS_LOGIN)                              initLogin();
     if (feat('mobile_deposit'))                initDeposit();
     if (IS_PURCHASE && feat('mobile_snipe'))   initPurchase();
@@ -537,7 +538,6 @@
 
   // ── 登入頁 ────────────────────────────────────────────
   function initLogin() {
-    installApiInterceptor();
     // 自動填入上次帳號（如果有）
     const savedAcc = localStorage.getItem('uni_last_account');
     if (savedAcc) {
