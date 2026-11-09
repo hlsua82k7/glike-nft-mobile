@@ -140,10 +140,25 @@
     return notifPerm === 'granted';
   }
 
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.3, 0.6].forEach(t => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.5, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+        o.start(ctx.currentTime + t);
+        o.stop(ctx.currentTime + t + 0.25);
+      });
+    } catch {}
+  }
+
   function pushNotif(title, body) {
-    // 頁面內提示（永遠有效）
     showToast(`${title}\n${body}`);
-    // 瀏覽器推播（需授權）
+    playBeep();
     if (HAS_NOTIF && notifPerm === 'granted') {
       try { new Notification(title, { body, icon: '/favicon.ico' }); } catch {}
     }
