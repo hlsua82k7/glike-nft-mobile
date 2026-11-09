@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.1.7
+// @version      1.1.8
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -36,7 +36,6 @@
     const result = await r.json();
     if (result.ok && result.user) {
       localStorage.setItem('uni_account', result.user);
-      setAccountDisplay(result.user);
     }
     return result;
   }
