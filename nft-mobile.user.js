@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.1.4
+// @version      1.1.5
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -33,7 +33,12 @@
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ key, device_id: getDeviceId(), domain: location.hostname })
     });
-    return await r.json();
+    const result = await r.json();
+    if (result.ok && result.user) {
+      localStorage.setItem('uni_account', result.user);
+      setAccountDisplay(result.user);
+    }
+    return result;
   }
 
   const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); } catch { return null; } })();
@@ -168,7 +173,6 @@
   // ── 主要初始化 ─────────────────────────────────────────
   function init() {
     buildPanel();
-    installApiInterceptor();
     if (IS_LOGIN)                              initLogin();
     if (feat('mobile_deposit'))                initDeposit();
     if (IS_PURCHASE && feat('mobile_snipe'))   initPurchase();
@@ -497,46 +501,7 @@
     renderSnipeAccSel();
   }
 
-  // ── API 攔截器（偵測登入回應）────────────────────────────
-  function installApiInterceptor() {
-    // 攔截 fetch
-    const origFetch = window.fetch;
-    window.fetch = async function(...args) {
-      const res = await origFetch.apply(this, args);
-      try {
-        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-        const clone = res.clone();
-        const ct = clone.headers.get('content-type') || '';
-        if (ct.includes('json')) {
-          clone.json().then(data => {
-            const str = JSON.stringify(data).slice(0, 300);
-            showToast(`[fetch] ${url.split('/').slice(-2).join('/')}\n${str}`);
-          }).catch(() => {});
-        }
-      } catch {}
-      return res;
-    };
-
-    // 攔截 XHR
-    const origOpen = XMLHttpRequest.prototype.open;
-    const origSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.open = function(method, url) {
-      this._url = url;
-      return origOpen.apply(this, arguments);
-    };
-    XMLHttpRequest.prototype.send = function() {
-      this.addEventListener('load', function() {
-        try {
-          const data = JSON.parse(this.responseText);
-          const str = JSON.stringify(data).slice(0, 300);
-          showToast(`[xhr] ${(this._url||'').split('/').slice(-2).join('/')}\n${str}`);
-        } catch {}
-      });
-      return origSend.apply(this, arguments);
-    };
-  }
-
-  // ── 登入頁 ────────────────────────────────────────────
+// ── 登入頁 ────────────────────────────────────────────
   function initLogin() {
     // 自動填入上次帳號（如果有）
     const savedAcc = localStorage.getItem('uni_last_account');
