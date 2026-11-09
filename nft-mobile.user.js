@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.1.6
+// @version      1.1.7
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -173,14 +173,13 @@
   // ── 主要初始化 ─────────────────────────────────────────
   function init() {
     buildPanel();
-    if (IS_HOME) installApiInterceptor();
     if (IS_LOGIN)                              initLogin();
     if (feat('mobile_deposit'))                initDeposit();
     if (IS_PURCHASE && feat('mobile_snipe'))   initPurchase();
     if (IS_HOME)                               initHome();
     else {
       // 非首頁也嘗試顯示已存的帳號
-      const stored = localStorage.getItem('uni_account');
+      const stored = localStorage.getItem('uni_site_account') || localStorage.getItem('uni_account');
       if (stored) setAccountDisplay(stored);
     }
     requestNotifPerm();
@@ -502,40 +501,7 @@
     renderSnipeAccSel();
   }
 
-  // ── API 攔截器 ────────────────────────────────────────
-  function installApiInterceptor() {
-    const origFetch = window.fetch;
-    window.fetch = async function(...args) {
-      const res = await origFetch.apply(this, args);
-      try {
-        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-        if (!url.includes('nft-license-worker')) {
-          const clone = res.clone();
-          const ct = clone.headers.get('content-type') || '';
-          if (ct.includes('json')) {
-            clone.json().then(data => {
-              showToast(`[fetch] ${url.split('/').slice(-2).join('/')}\n${JSON.stringify(data).slice(0, 200)}`);
-            }).catch(() => {});
-          }
-        }
-      } catch {}
-      return res;
-    };
-    const origOpen = XMLHttpRequest.prototype.open;
-    const origSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.open = function(method, url) { this._url = url; return origOpen.apply(this, arguments); };
-    XMLHttpRequest.prototype.send = function() {
-      this.addEventListener('load', function() {
-        try {
-          const data = JSON.parse(this.responseText);
-          showToast(`[xhr] ${(this._url||'').split('/').slice(-2).join('/')}\n${JSON.stringify(data).slice(0, 200)}`);
-        } catch {}
-      });
-      return origSend.apply(this, arguments);
-    };
-  }
-
-// ── 登入頁 ────────────────────────────────────────────
+  // ── 登入頁 ────────────────────────────────────────────
   function initLogin() {
     // 自動填入上次帳號（如果有）
     const savedAcc = localStorage.getItem('uni_last_account');
@@ -565,31 +531,24 @@
   }
 
   function tryDetectAccount() {
-    // 先看 localStorage 有沒有已存的帳號
-    const stored = localStorage.getItem('uni_account');
+    const stored = localStorage.getItem('uni_site_account') || localStorage.getItem('uni_account');
 
-    // 嘗試從頁面元素抓（常見的顯示位置）
-    const selectors = [
-      '.user-name', '.username', '.account', '#username', '#account',
-      '[class*="user"]', '[class*="account"]', '[class*="member"]',
-      'nav .name', 'header .name', '.profile-name'
-    ];
+    // 從首頁 "Hey, 劉正鴻" 段落抓帳號
     let found = null;
-    for (const sel of selectors) {
-      try {
-        const el = document.querySelector(sel);
-        if (el && el.textContent.trim()) { found = el.textContent.trim(); break; }
-      } catch {}
+    const heyEl = document.querySelector('.area_title_box .title p');
+    if (heyEl) {
+      const raw = heyEl.textContent.trim();
+      found = raw.replace(/^Hey[,，]\s*/i, '').trim();
+    }
+    // 備用：側欄顯示名
+    if (!found) {
+      const sideEl = document.querySelector('.slider_header .info_box .text');
+      if (sideEl) found = sideEl.textContent.trim();
     }
 
-    // 也嘗試抓 API
-    fetchAccountFromApi();
-
-    const acc = found || stored;
-    if (acc) {
-      if (found) localStorage.setItem('uni_account', found);
-      showToast(`登入帳號：${acc}`);
-      setAccountDisplay(acc);
+    if (found) {
+      localStorage.setItem('uni_site_account', found);
+      setAccountDisplay(found);
     } else if (stored) {
       setAccountDisplay(stored);
     }
@@ -610,29 +569,6 @@
       }
     }
     accEl.textContent = '帳號：' + acc;
-  }
-
-  async function fetchAccountFromApi() {
-    try {
-      // 嘗試常見的 user info API
-      const urls = ['/api/user', '/api/me', '/User/Info', '/Account/Info', '/Home/GetUserInfo'];
-      for (const u of urls) {
-        try {
-          const r = await fetch(u, { credentials: 'include' });
-          if (!r.ok) continue;
-          const ct = r.headers.get('content-type') || '';
-          if (!ct.includes('json')) continue;
-          const data = await r.json();
-          // 嘗試常見欄位
-          const acc = data.account || data.Account || data.username || data.UserName || data.name || data.Name || data.loginName;
-          if (acc) {
-            localStorage.setItem('uni_account', acc);
-            showToast(`偵測帳號（API）：${acc}`);
-            return;
-          }
-        } catch {}
-      }
-    } catch {}
   }
 
   boot();
