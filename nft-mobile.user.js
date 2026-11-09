@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      1.2.1
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -48,7 +48,13 @@
   const feat = (k) => FEATURES[k] !== false;
 
   async function boot() {
-    // 先嘗試呼叫 Worker（即使沒有 key，bypass 模式下也會放行）
+    // 必須先登入網站取得帳號，才能進行授權驗證
+    const siteAccount = localStorage.getItem('uni_site_account');
+    if (!siteAccount) {
+      // 尚未登入，靜默等待（登入後首頁會抓帳號並觸發 refreshLicense）
+      return;
+    }
+
     if (cacheValid) { init(); refreshLicense(); return; }
     try {
       const res = await verifyLicense(LICENSE_KEY);
@@ -57,11 +63,9 @@
         if (res.features) FEATURES = res.features;
         init();
       } else {
-        // Worker 拒絕：沒有 key 或 key 無效
         showLicensePrompt(res.reason || '授權無效');
       }
     } catch {
-      // 網路失敗：有 key 且有 cache 就放行，否則顯示輸入框
       if (LICENSE_KEY && cacheValid) init();
       else if (!LICENSE_KEY) showLicensePrompt();
       else showLicensePrompt('驗證失敗，請檢查網路');
@@ -549,8 +553,8 @@
       const prev = localStorage.getItem('uni_site_account');
       localStorage.setItem('uni_site_account', found);
       setAccountDisplay(found);
-      // 若帳號是第一次抓到（之前是隨機 ID），重新 verify 更新綁定
-      if (!prev && LICENSE_KEY) refreshLicense();
+      // 第一次抓到帳號：重新跑完整 boot（確保用真實帳號綁定）
+      if (!prev) boot();
     } else if (stored) {
       setAccountDisplay(stored);
     }
