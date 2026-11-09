@@ -499,11 +499,88 @@
       const accInput = document.querySelector('input[type="text"],input[name*="account"],input[name*="user"]');
       if (accInput && !accInput.value) accInput.value = savedAcc;
     }
+
+    // 偵測登入表單送出，抓取帳號
+    document.addEventListener('submit', e => {
+      const form = e.target;
+      const accInput = form.querySelector('input[type="text"],input[name*="account"],input[name*="user"],input[name*="Account"]');
+      if (accInput && accInput.value.trim()) {
+        const acc = accInput.value.trim();
+        localStorage.setItem('uni_last_account', acc);
+        localStorage.setItem('uni_account', acc);
+        showToast(`偵測帳號：${acc}`);
+      }
+    }, true);
   }
 
   // ── 首頁 ──────────────────────────────────────────────
   function initHome() {
     setDepSt('● 首頁', '#5b9cf6');
+    // 嘗試從頁面抓帳號
+    tryDetectAccount();
+  }
+
+  function tryDetectAccount() {
+    // 先看 localStorage 有沒有已存的帳號
+    const stored = localStorage.getItem('uni_account');
+
+    // 嘗試從頁面元素抓（常見的顯示位置）
+    const selectors = [
+      '.user-name', '.username', '.account', '#username', '#account',
+      '[class*="user"]', '[class*="account"]', '[class*="member"]',
+      'nav .name', 'header .name', '.profile-name'
+    ];
+    let found = null;
+    for (const sel of selectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && el.textContent.trim()) { found = el.textContent.trim(); break; }
+      } catch {}
+    }
+
+    // 也嘗試抓 API
+    fetchAccountFromApi();
+
+    const acc = found || stored;
+    if (acc) {
+      if (found) localStorage.setItem('uni_account', found);
+      showToast(`登入帳號：${acc}`);
+      // 顯示在面板
+      const panel = document.getElementById('m-panel');
+      if (panel) {
+        let accEl = document.getElementById('m-account-info');
+        if (!accEl) {
+          accEl = document.createElement('div');
+          accEl.id = 'm-account-info';
+          accEl.style.cssText = 'font-size:11px;color:#aaa;padding:2px 0;border-bottom:1px solid #333;margin-bottom:4px;';
+          panel.querySelector('.m-content')?.prepend(accEl);
+        }
+        accEl.textContent = '帳號：' + acc;
+      }
+    }
+  }
+
+  async function fetchAccountFromApi() {
+    try {
+      // 嘗試常見的 user info API
+      const urls = ['/api/user', '/api/me', '/User/Info', '/Account/Info', '/Home/GetUserInfo'];
+      for (const u of urls) {
+        try {
+          const r = await fetch(u, { credentials: 'include' });
+          if (!r.ok) continue;
+          const ct = r.headers.get('content-type') || '';
+          if (!ct.includes('json')) continue;
+          const data = await r.json();
+          // 嘗試常見欄位
+          const acc = data.account || data.Account || data.username || data.UserName || data.name || data.Name || data.loginName;
+          if (acc) {
+            localStorage.setItem('uni_account', acc);
+            showToast(`偵測帳號（API）：${acc}`);
+            return;
+          }
+        } catch {}
+      }
+    } catch {}
   }
 
   boot();
