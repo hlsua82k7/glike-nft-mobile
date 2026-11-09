@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.1.8
+// @version      1.1.9
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -31,7 +31,7 @@
   async function verifyLicense(key) {
     const r = await fetch(`${LICENSE_URL}/verify`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ key, device_id: getDeviceId(), domain: location.hostname })
+      body: JSON.stringify({ key, device_id: localStorage.getItem('uni_site_account') || getDeviceId(), domain: location.hostname })
     });
     const result = await r.json();
     if (result.ok && result.user) {
