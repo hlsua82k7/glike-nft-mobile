@@ -28,12 +28,58 @@
     return id;
   }
 
+  // 裝置指紋：組合多項瀏覽器特徵，同一台機器每次算出來幾乎一樣
+  async function getFingerprint() {
+    const parts = [
+      screen.width + 'x' + screen.height,
+      screen.colorDepth,
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+      navigator.language,
+      navigator.platform,
+      navigator.hardwareConcurrency || '',
+    ];
+    // Canvas 指紋
+    try {
+      const c = document.createElement('canvas');
+      const ctx = c.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#f60';
+      ctx.fillText('NFT🎯', 2, 2);
+      parts.push(c.toDataURL().slice(-40));
+    } catch {}
+    // Audio 指紋
+    try {
+      const actx = new OfflineAudioContext(1, 44100, 44100);
+      const osc = actx.createOscillator();
+      osc.connect(actx.destination);
+      osc.start(0);
+      const buf = await actx.startRendering();
+      const data = buf.getChannelData(0);
+      let sum = 0;
+      for (let i = 0; i < 100; i++) sum += Math.abs(data[i]);
+      parts.push(sum.toFixed(8));
+    } catch {}
+    // 簡單 hash
+    const str = parts.join('|');
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+    return 'fp-' + Math.abs(h).toString(36);
+  }
+
   async function verifyLicense(key) {
+    const deviceId = getDeviceId();
+    const fingerprint = await getFingerprint();
     const r = await fetch(`${LICENSE_URL}/verify`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ key, device_id: getDeviceId(), domain: location.hostname })
+      body: JSON.stringify({ key, device_id: deviceId, fingerprint, domain: location.hostname })
     });
-    return await r.json();
+    const result = await r.json();
+    // 若後台認出 fingerprint 屬於已綁定裝置，更新本地 device_id
+    if (result.ok && result.device_id && result.device_id !== deviceId) {
+      localStorage.setItem('uni_device_id', result.device_id);
+    }
+    return result;
   }
 
   const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); } catch { return null; } })();
