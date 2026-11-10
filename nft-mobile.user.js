@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.7
+// @version      1.2.8
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -179,6 +179,19 @@
     if (btn) { btn.disabled = false; btn.textContent = '🔄 同步'; }
   }
 
+  // ── TG 發送 ───────────────────────────────────────────
+  async function tgSend(text) {
+    const token = localStorage.getItem('uni_tg_token');
+    const chat  = localStorage.getItem('uni_tg_chat');
+    if (!token || !chat) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chat, text, parse_mode: 'HTML' })
+      });
+    } catch {}
+  }
+
   // ── 通知 ──────────────────────────────────────────────
   const HAS_NOTIF = typeof Notification !== 'undefined';
   let notifPerm = HAS_NOTIF ? Notification.permission : 'denied';
@@ -348,6 +361,16 @@
       </div>` : ''}
 
       <div class="m-sec">
+        <div class="m-sec-t">📨 TG 通知設定</div>
+        <input id="m-tg-token" type="text" placeholder="Bot Token" style="width:100%;box-sizing:border-box;padding:7px 10px;border-radius:8px;border:1px solid #444;background:#111;color:#fff;font-size:12px;margin-bottom:6px;" value="${localStorage.getItem('uni_tg_token')||''}">
+        <input id="m-tg-chat" type="text" placeholder="Chat ID" style="width:100%;box-sizing:border-box;padding:7px 10px;border-radius:8px;border:1px solid #444;background:#111;color:#fff;font-size:12px;margin-bottom:8px;" value="${localStorage.getItem('uni_tg_chat')||''}">
+        <div class="m-row">
+          <button class="m-btn blue" id="m-tg-save">💾 儲存</button>
+          <button class="m-btn" id="m-tg-test">🧪 測試</button>
+        </div>
+      </div>
+
+      <div class="m-sec">
         <div class="m-sec-t">📊 今日統計</div>
         <div class="m-st" id="m-stat-text" style="white-space:pre-wrap;">${buildStatText()}</div>
         <div class="m-row">
@@ -364,6 +387,20 @@
   }
 
   function bindPanelEvents() {
+    document.getElementById('m-tg-save')?.addEventListener('click', () => {
+      const token = document.getElementById('m-tg-token').value.trim();
+      const chat  = document.getElementById('m-tg-chat').value.trim();
+      if (token) localStorage.setItem('uni_tg_token', token);
+      if (chat)  localStorage.setItem('uni_tg_chat', chat);
+      showToast('TG 設定已儲存');
+    });
+    document.getElementById('m-tg-test')?.addEventListener('click', async () => {
+      const btn = document.getElementById('m-tg-test');
+      if (btn) { btn.disabled = true; btn.textContent = '發送中…'; }
+      await tgSend('✅ 手機版 TG 通知測試成功');
+      if (btn) { btn.disabled = false; btn.textContent = '🧪 測試'; }
+      showToast('測試訊息已發送');
+    });
     document.getElementById('m-stat-sync')?.addEventListener('click', syncStatsFromList);
     // 搶單帳戶匯入
     document.getElementById('m-s-import')?.addEventListener('click', importSnipeAccs);
@@ -446,6 +483,7 @@
         if (HAS_NOTIF && notifPerm === 'granted') {
           try { new Notification('🚨 新銷貨訂單', { body: `回報號碼：${serial}\n金額：${amount}`, icon: '/favicon.ico' }); } catch {}
         }
+        tgSend(`🚨 <b>新銷貨訂單</b>\n回報號碼：${serial}\n金額：${amount}\n${bank}`);
       }
     } catch {}
   }
