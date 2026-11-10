@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.5
+// @version      1.2.6
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -271,6 +271,7 @@
       <div class="m-sec">
         <div class="m-sec-t">📦 銷貨監控</div>
         <div class="m-st" id="m-dep-st">● 監控中</div>
+        <div style="font-size:11px;color:#f0c040;margin:4px 0 6px;line-height:1.4;">⚠️ 請保持此頁面開著，縮小後通知將停止</div>
         <div class="m-row">
           <button class="m-btn orange" id="m-dep-pause">⏸ 暫停</button>
         </div>
