@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.8
+// @version      1.2.9
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -366,6 +366,10 @@
         <input id="m-tg-chat" type="text" placeholder="Chat ID" style="width:100%;box-sizing:border-box;padding:7px 10px;border-radius:8px;border:1px solid #444;background:#111;color:#fff;font-size:12px;margin-bottom:8px;" value="${localStorage.getItem('uni_tg_chat')||''}">
         <div class="m-row">
           <button class="m-btn blue" id="m-tg-save">💾 儲存</button>
+          <button class="m-btn" id="m-tg-detect">🔍 偵測 ID</button>
+        </div>
+        <div id="m-tg-st" style="font-size:11px;color:#aaa;margin-top:4px;"></div>
+        <div class="m-row" style="margin-top:6px;">
           <button class="m-btn" id="m-tg-test">🧪 測試</button>
         </div>
       </div>
@@ -387,6 +391,30 @@
   }
 
   function bindPanelEvents() {
+    document.getElementById('m-tg-detect')?.addEventListener('click', async () => {
+      const token = document.getElementById('m-tg-token').value.trim() || localStorage.getItem('uni_tg_token');
+      const st = document.getElementById('m-tg-st');
+      const btn = document.getElementById('m-tg-detect');
+      if (!token) { if (st) { st.textContent = '⚠️ 請先填入 Token'; st.style.color = '#f0c040'; } return; }
+      if (st) { st.textContent = '🔍 偵測中...'; st.style.color = '#aaa'; }
+      if (btn) btn.disabled = true;
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=20&offset=-20`);
+        const data = await r.json();
+        if (!data.ok) { if (st) { st.textContent = '❌ Token 無效'; st.style.color = '#f55'; } return; }
+        const updates = data.result || [];
+        let chatId = '';
+        for (let i = updates.length - 1; i >= 0; i--) {
+          const u = updates[i];
+          const id = u.message?.chat?.id || u.callback_query?.message?.chat?.id || u.channel_post?.chat?.id;
+          if (id) { chatId = String(id); break; }
+        }
+        if (!chatId) { if (st) { st.textContent = '⚠️ 找不到訊息，請先對 Bot 傳一則訊息再試'; st.style.color = '#f0c040'; } return; }
+        document.getElementById('m-tg-chat').value = chatId;
+        if (st) { st.textContent = `✅ 偵測到：${chatId}，請按儲存`; st.style.color = '#4ec97a'; }
+      } catch { if (st) { st.textContent = '❌ 網路錯誤'; st.style.color = '#f55'; } }
+      if (btn) btn.disabled = false;
+    });
     document.getElementById('m-tg-save')?.addEventListener('click', () => {
       const token = document.getElementById('m-tg-token').value.trim();
       const chat  = document.getElementById('m-tg-chat').value.trim();
