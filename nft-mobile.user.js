@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.9
+// @version      1.3.0
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -226,16 +226,16 @@
     }
   }
 
-  function showOrderAlert(serial, amount, bank) {
+  function showOrderAlert(serial, amount, bank, isReminder = false) {
     // 移除舊彈窗
     document.getElementById('m-order-alert')?.remove();
     const d = document.createElement('div');
     d.id = 'm-order-alert';
     d.style.cssText = 'position:fixed;inset:0;z-index:9999998;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;';
     d.innerHTML = `
-      <div style="background:#1a1a2e;border:2px solid #ffd700;border-radius:16px;padding:28px 24px;width:300px;text-align:center;color:#fff;">
-        <div style="font-size:36px;margin-bottom:8px;">🚨</div>
-        <div style="font-size:20px;font-weight:700;color:#ffd700;margin-bottom:16px;">新銷貨訂單</div>
+      <div style="background:#1a1a2e;border:2px solid ${isReminder ? '#ff6b6b' : '#ffd700'};border-radius:16px;padding:28px 24px;width:300px;text-align:center;color:#fff;">
+        <div style="font-size:36px;margin-bottom:8px;">${isReminder ? '⏰' : '🚨'}</div>
+        <div style="font-size:20px;font-weight:700;color:${isReminder ? '#ff6b6b' : '#ffd700'};margin-bottom:16px;">${isReminder ? '未回報提醒' : '新銷貨訂單'}</div>
         <div style="background:#111;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left;line-height:2;">
           <div style="font-size:13px;color:#aaa;">回報號碼</div>
           <div style="font-size:16px;font-weight:600;">${serial}</div>
@@ -450,7 +450,6 @@
   const LS_DEP_STATE = 'uni_ogm_state';
 
   let depPaused = false;
-  let depNotified = new Set();
 
   function loadDepState() { try { return JSON.parse(localStorage.getItem(LS_DEP_STATE)||'{}'); } catch { return {}; } }
   function saveDepState(m) { localStorage.setItem(LS_DEP_STATE, JSON.stringify(m)); }
@@ -491,27 +490,31 @@
         if (!serial || (done !== '0' && done !== '')) continue;
 
         const entry = st[serial];
+        const isNew = !entry;
         if (entry && now - entry.notifiedAt < RENOTIFY_MS) continue;
-        if (depNotified.has(serial)) continue;
 
         const amount = tds[3]?.textContent?.trim() || '';
         const bank   = tds[6]?.textContent?.trim() || '';
 
-        depNotified.add(serial);
-        st[serial] = { notifiedAt: now };
+        const firstNotifiedAt = entry?.firstNotifiedAt || now;
+        st[serial] = { notifiedAt: now, firstNotifiedAt };
         saveDepState(st);
 
-        // 記錄統計
-        const amtNum = parseFloat((amount || '0').replace(/,/g, '')) || 0;
-        if (amtNum > 0) recordDepositStat(bank, amtNum);
-
-        playBeep();
-        showOrderAlert(serial, amount, bank);
-        setDepSt(`⚠️ 有新訂單！${serial}`, '#ffd700');
-        if (HAS_NOTIF && notifPerm === 'granted') {
-          try { new Notification('🚨 新銷貨訂單', { body: `回報號碼：${serial}\n金額：${amount}`, icon: '/favicon.ico' }); } catch {}
+        // 記錄統計（只在第一次）
+        if (isNew) {
+          const amtNum = parseFloat((amount || '0').replace(/,/g, '')) || 0;
+          if (amtNum > 0) recordDepositStat(bank, amtNum);
         }
-        tgSend(`🚨 <b>新銷貨訂單</b>\n回報號碼：${serial}\n金額：${amount}\n${bank}`);
+
+        const isReminder = !isNew;
+        const title = isReminder ? '⏰ 未回報提醒' : '🚨 新銷貨訂單';
+        playBeep();
+        showOrderAlert(serial, amount, bank, isReminder);
+        setDepSt(`⚠️ ${isReminder ? '未回報！' : '有新訂單！'}${serial}`, '#ffd700');
+        if (HAS_NOTIF && notifPerm === 'granted') {
+          try { new Notification(title, { body: `回報號碼：${serial}\n金額：${amount}`, icon: '/favicon.ico' }); } catch {}
+        }
+        tgSend(`${title}\n回報號碼：${serial}\n金額：${amount}\n${bank}`);
       }
     } catch {}
   }
