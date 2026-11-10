@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.6
+// @version      1.2.7
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -136,8 +136,47 @@
     const entries = Object.entries(stats).sort((a,b) => b[1]-a[1]);
     if (!entries.length) return '今日尚無紀錄';
     const total = entries.reduce((s,[,v]) => s+v, 0);
-    return entries.map(([b,a],i) => `${i+1}. ${b} ${a.toLocaleString()}元`).join('\n')
-      + `\n合計：${total.toLocaleString()}元`;
+    return entries.map(([b,a],i) => `${i+1}. ${b}  ${a.toLocaleString()}元`).join('\n')
+      + `\n─────────────\n合計：${total.toLocaleString()}元`;
+  }
+
+  async function syncStatsFromList() {
+    const today = todayKey();
+    const btn = document.getElementById('m-stat-sync');
+    if (btn) { btn.disabled = true; btn.textContent = '同步中…'; }
+    try {
+      const res = await fetch('https://nft.glike.info/DepositList/', { credentials: 'include' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const table = doc.querySelector('table');
+      if (!table) throw new Error('找不到表格');
+
+      const headers = [...table.querySelectorAll('th')].map(th => th.textContent.trim());
+      let iAmt = 4, iBank = 6, iTime = 0;
+      headers.forEach((h, i) => {
+        if (/完成金[額额]/.test(h)) iAmt = i;
+        if (/存[款帳帐戶户]/.test(h)) iBank = i;
+        if (/時間|时间/.test(h)) iTime = i;
+      });
+
+      const dayStats = {};
+      for (const row of table.querySelectorAll('tbody tr')) {
+        const cells = [...row.querySelectorAll('td')].map(td => td.textContent.trim());
+        if (cells.length < 5) continue;
+        if ((cells[iTime] || '').slice(0, 10) !== today) continue;
+        const amt = parseFloat((cells[iAmt] || '').replace(/,/g, '')) || 0;
+        if (amt <= 0) continue;
+        const bankRaw = cells[iBank] || '';
+        const bank = bankRaw.split(/[\n\r\s　]+/).find(s => s && !/^\d{6,}$/.test(s)) || '未知銀行';
+        dayStats[bank] = (dayStats[bank] || 0) + amt;
+      }
+
+      const all = loadStats(); all[today] = dayStats; saveStats(all);
+      document.getElementById('m-stat-text').textContent = buildStatText();
+    } catch(e) {
+      document.getElementById('m-stat-text').textContent = '同步失敗：' + e.message;
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 同步'; }
   }
 
   // ── 通知 ──────────────────────────────────────────────
@@ -312,7 +351,7 @@
         <div class="m-sec-t">📊 今日統計</div>
         <div class="m-st" id="m-stat-text" style="white-space:pre-wrap;">${buildStatText()}</div>
         <div class="m-row">
-          <button class="m-btn blue" id="m-stat-refresh">🔄 更新</button>
+          <button class="m-btn blue" id="m-stat-sync">🔄 同步</button>
         </div>
       </div>
     `;
@@ -325,9 +364,7 @@
   }
 
   function bindPanelEvents() {
-    document.getElementById('m-stat-refresh')?.addEventListener('click', () => {
-      document.getElementById('m-stat-text').textContent = buildStatText();
-    });
+    document.getElementById('m-stat-sync')?.addEventListener('click', syncStatsFromList);
     // 搶單帳戶匯入
     document.getElementById('m-s-import')?.addEventListener('click', importSnipeAccs);
     // 搶單開始/停止
