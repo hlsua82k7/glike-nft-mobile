@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NFT 手機版
 // @namespace    http://tampermonkey.net/
-// @version      1.2.4
+// @version      1.2.5
 // @description  手機版：銷貨監控 / 搶單 / 統計（無TG）
 // @author       gigig i
 // @match        https://nft.glike.info/*
@@ -172,6 +172,30 @@
     if (HAS_NOTIF && notifPerm === 'granted') {
       try { new Notification(title, { body, icon: '/favicon.ico' }); } catch {}
     }
+  }
+
+  function showOrderAlert(serial, amount, bank) {
+    // 移除舊彈窗
+    document.getElementById('m-order-alert')?.remove();
+    const d = document.createElement('div');
+    d.id = 'm-order-alert';
+    d.style.cssText = 'position:fixed;inset:0;z-index:9999998;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;';
+    d.innerHTML = `
+      <div style="background:#1a1a2e;border:2px solid #ffd700;border-radius:16px;padding:28px 24px;width:300px;text-align:center;color:#fff;">
+        <div style="font-size:36px;margin-bottom:8px;">🚨</div>
+        <div style="font-size:20px;font-weight:700;color:#ffd700;margin-bottom:16px;">新銷貨訂單</div>
+        <div style="background:#111;border-radius:10px;padding:14px;margin-bottom:20px;text-align:left;line-height:2;">
+          <div style="font-size:13px;color:#aaa;">回報號碼</div>
+          <div style="font-size:16px;font-weight:600;">${serial}</div>
+          <div style="font-size:13px;color:#aaa;margin-top:8px;">金額</div>
+          <div style="font-size:16px;font-weight:600;color:#4ec97a;">${amount}</div>
+          <div style="font-size:13px;color:#aaa;margin-top:8px;">銀行</div>
+          <div style="font-size:14px;">${bank}</div>
+        </div>
+        <button id="m-alert-close" style="width:100%;padding:13px;border:none;border-radius:10px;background:#5865f2;color:#fff;font-size:16px;font-weight:600;cursor:pointer;">確認知道了</button>
+      </div>`;
+    document.body.appendChild(d);
+    document.getElementById('m-alert-close').onclick = () => d.remove();
   }
 
   function showToast(msg) {
@@ -374,12 +398,16 @@
         st[serial] = { notifiedAt: now };
         saveDepState(st);
 
-        pushNotif('🚨 新銷貨訂單', `回報號碼：${serial}\n金額：${amount}\n${bank}`);
-        setDepSt(`⚠️ 有新訂單！${serial}`, '#ffd700');
+        // 記錄統計
+        const amtNum = parseFloat((amount || '0').replace(/,/g, '')) || 0;
+        if (amtNum > 0) recordDepositStat(bank, amtNum);
 
-        // 自動開啟面板
-        const panel = document.getElementById('m-panel');
-        if (panel && !panelOpen) { panelOpen = true; panel.classList.add('open'); }
+        playBeep();
+        showOrderAlert(serial, amount, bank);
+        setDepSt(`⚠️ 有新訂單！${serial}`, '#ffd700');
+        if (HAS_NOTIF && notifPerm === 'granted') {
+          try { new Notification('🚨 新銷貨訂單', { body: `回報號碼：${serial}\n金額：${amount}`, icon: '/favicon.ico' }); } catch {}
+        }
       }
     } catch {}
   }
